@@ -29,4 +29,36 @@ pub const Circle = struct {
             self.vel.x = -self.vel.x * 0.8;
         }
     }
+
+    pub fn collidesWith(self: Circle, other: Circle) bool {
+        const dist = self.pos.distance(other.pos);
+        return dist < self.radius + other.radius;
+    }
+
+    pub fn resolveCollision(self: *Circle, other: *Circle) void {
+        const delta = self.pos.sub(other.pos);
+        const dist = delta.length();
+        if (dist == 0) return;
+
+        const normal = delta.normalize();
+        const overlap = (self.radius + other.radius) - dist;
+
+        // Separate circles
+        self.pos = self.pos.add(normal.scale(overlap * 0.5));
+        other.pos = other.pos.sub(normal.scale(overlap * 0.5));
+
+        // Elastic collision response
+        const relVel = self.vel.sub(other.vel);
+        const velAlongNormal = relVel.dot(normal);
+
+        if (velAlongNormal > 0) return; // Moving apart
+
+        const restitution: f32 = 0.8;
+        const totalMass = self.mass + other.mass;
+
+        const impulse = -(1 + restitution) * velAlongNormal / totalMass;
+
+        self.vel = self.vel.add(normal.scale(impulse * other.mass));
+        other.vel = other.vel.sub(normal.scale(impulse * self.mass));
+    }
 };

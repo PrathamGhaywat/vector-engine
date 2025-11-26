@@ -7,7 +7,7 @@ pub fn main() anyerror!void {
     const screenWidth = 800;
     const screenHeight = 450;
 
-    rl.setConfigFlags(.{.window_resizable = true });
+    rl.setConfigFlags(.{ .window_resizable = true });
     rl.initWindow(screenWidth, screenHeight, "VectorEngine");
     defer rl.closeWindow();
     rl.setTargetFPS(60);
@@ -48,6 +48,15 @@ pub fn main() anyerror!void {
             circle.update(gravity, dt, currentWidth, currentHeight);
         }
 
+        // Check circle-to-circle collisions
+        for (circles.items, 0..) |*circle1, i| {
+            for (circles.items[i + 1 ..]) |*circle2| {
+                if (circle1.collidesWith(circle2.*)) {
+                    circle1.resolveCollision(circle2);
+                }
+            }
+        }
+
         //clear circles
         if (rl.isKeyPressed(.c)) {
             circles.clearRetainingCapacity();
@@ -66,20 +75,16 @@ pub fn main() anyerror!void {
         //ui
         var gravity_text_buf: [128]u8 = undefined;
         const gravity_text_remainder =
-            try std.fmt.bufPrint(&gravity_text_buf,
-                "Gravity: {d:.0} (UP/DOWN to adjust, SPACE to zero, R to reset.",
-                .{gravity.y}
-            );
+            try std.fmt.bufPrint(&gravity_text_buf, "Gravity: {d:.0} (UP/DOWN to adjust, SPACE to zero, R to reset.", .{gravity.y});
         const gravity_text_len = gravity_text_buf.len - gravity_text_remainder.len;
 
         //add sentinel
         gravity_text_buf[gravity_text_len] = 0;
 
-        const gravityText: [:0]const u8 = gravity_text_buf[0 .. gravity_text_len :0];
+        const gravityText: [:0]const u8 = gravity_text_buf[0..gravity_text_len :0];
 
         rl.drawText("Click to spawn balls", 10, 10, 20, .green);
         rl.drawText(gravityText, 10, 35, 20, .black);
         rl.drawText("Press C to erase all balls", 10, 60, 20, .black);
-
     }
 }
