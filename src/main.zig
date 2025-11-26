@@ -7,6 +7,7 @@ pub fn main() anyerror!void {
     const screenWidth = 800;
     const screenHeight = 450;
 
+    rl.setConfigFlags(.{.window_resizable = true });
     rl.initWindow(screenWidth, screenHeight, "VectorEngine");
     defer rl.closeWindow();
     rl.setTargetFPS(60);
@@ -22,6 +23,9 @@ pub fn main() anyerror!void {
     const dt: f32 = 1.0 / 60.0;
 
     while (!rl.windowShouldClose()) {
+        //win dimensions
+        const currentWidth: f32 = @floatFromInt(rl.getScreenWidth());
+        const currentHeight: f32 = @floatFromInt(rl.getScreenHeight());
         //spawn circle on mouse click
         if (rl.isMouseButtonPressed(.left)) {
             const mousePos = rl.getMousePosition();
@@ -41,7 +45,7 @@ pub fn main() anyerror!void {
 
         //update every circle
         for (circles.items) |*circle| {
-            circle.update(gravity, dt, screenHeight);
+            circle.update(gravity, dt, currentWidth, currentHeight);
         }
 
         //clear circles

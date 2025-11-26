@@ -6,7 +6,7 @@ pub const Circle = struct {
     radius: f32,
     mass: f32,
 
-    pub fn update(self: *Circle, gravity: Vec2, dt: f32,screenHeight: f32) void {
+    pub fn update(self: *Circle, gravity: Vec2, dt: f32, screenWidth: f32, screenHeight: f32) void {
         //apply gravity
         self.vel = self.vel.add(gravity.scale(dt));
 
@@ -24,11 +24,9 @@ pub const Circle = struct {
             self.pos.x = self.radius;
             self.vel.x = -self.vel.x * 0.8;
         }
-        if (self.pos.x + self.radius > 800) {
-            self.pos.x = 800 - self.radius;
+        if (self.pos.x + self.radius > screenWidth) {
+            self.pos.x = screenWidth - self.radius;
             self.vel.x = -self.vel.x * 0.8;
         }
-
-
     }
 };
