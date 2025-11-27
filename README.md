@@ -26,5 +26,3 @@ after that you will see a zig-out/bin folder. inside bin there will be a Project
 
 ## License
 This is licensed under Apache License 2.0
-
-
