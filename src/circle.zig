@@ -43,11 +43,11 @@ pub const Circle = struct {
         const normal = delta.normalize();
         const overlap = (self.radius + other.radius) - dist;
 
-        // Separate circles
+        //separate circles
         self.pos = self.pos.add(normal.scale(overlap * 0.5));
         other.pos = other.pos.sub(normal.scale(overlap * 0.5));
 
-        // Elastic collision response
+        //elastic collision response
         const relVel = self.vel.sub(other.vel);
         const velAlongNormal = relVel.dot(normal);
 

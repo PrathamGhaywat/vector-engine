@@ -22,16 +22,32 @@ pub fn main() anyerror!void {
     var gravity = Vec2{ .x = 0, .y = 500 };
     const dt: f32 = 1.0 / 60.0;
 
+    //drag and throw state
+    var isDragging = false;
+    var dragStart = Vec2{ .x = 0, .y = 0 };
+
     while (!rl.windowShouldClose()) {
         //win dimensions
         const currentWidth: f32 = @floatFromInt(rl.getScreenWidth());
         const currentHeight: f32 = @floatFromInt(rl.getScreenHeight());
-        //spawn circle on mouse click
+
+        const mousePos = rl.getMousePosition();
+        const mouseVec = Vec2{ .x = mousePos.x, .y = mousePos.y };
+
+        //drag
         if (rl.isMouseButtonPressed(.left)) {
-            const mousePos = rl.getMousePosition();
+            isDragging = true;
+            dragStart = mouseVec;
+        }
+
+        //release and throw
+        if (rl.isMouseButtonReleased(.left) and isDragging) {
+            isDragging = false;
+            const throwVel = dragStart.sub(mouseVec).scale(5.0); 
+
             try circles.append(allocator, Circle{
-                .pos = Vec2{ .x = mousePos.x, .y = mousePos.y },
-                .vel = Vec2{ .x = 0.0, .y = 0.0 },
+                .pos = dragStart,
+                .vel = throwVel,
                 .radius = 20.0,
                 .mass = 1.0,
             });
@@ -48,7 +64,7 @@ pub fn main() anyerror!void {
             circle.update(gravity, dt, currentWidth, currentHeight);
         }
 
-        // Check circle-to-circle collisions
+        //check circle-to-circle collisions
         for (circles.items, 0..) |*circle1, i| {
             for (circles.items[i + 1 ..]) |*circle2| {
                 if (circle1.collidesWith(circle2.*)) {
@@ -67,6 +83,12 @@ pub fn main() anyerror!void {
 
         rl.clearBackground(.white);
 
+        //draw drag line preview
+        if (isDragging) {
+            rl.drawCircle(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), 20.0, .{ .r = 255, .g = 0, .b = 0, .a = 100 });
+            rl.drawLine(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), @intFromFloat(mousePos.x), @intFromFloat(mousePos.y), .blue);
+        }
+
         //draw all circles
         for (circles.items) |circle| {
             rl.drawCircle(@intFromFloat(circle.pos.x), @intFromFloat(circle.pos.y), circle.radius, .red);
@@ -83,7 +105,7 @@ pub fn main() anyerror!void {
 
         const gravityText: [:0]const u8 = gravity_text_buf[0..gravity_text_len :0];
 
-        rl.drawText("Click to spawn balls", 10, 10, 20, .green);
+        rl.drawText("Click and drag to throw balls", 10, 10, 20, .green);
         rl.drawText(gravityText, 10, 35, 20, .black);
         rl.drawText("Press C to erase all balls", 10, 60, 20, .black);
     }
