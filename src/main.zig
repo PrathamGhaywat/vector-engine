@@ -1,7 +1,9 @@
 const rl = @import("raylib");
 const std = @import("std");
 const Vec2 = @import("vec2.zig").Vec2;
-const Circle = @import("circle.zig").Circle;
+const Body = @import("body.zig").Body;
+const Shape = @import("shape.zig").Shape;
+const World = @import("world.zig").World;
 
 pub fn main() anyerror!void {
     const screenWidth = 800;
@@ -16,25 +18,29 @@ pub fn main() anyerror!void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var circles = try std.ArrayList(Circle).initCapacity(allocator, 0);
-    defer circles.deinit(allocator);
+    var world = World.init(allocator);
+    defer world.deinit();
 
-    var gravity = Vec2{ .x = 0, .y = 500 };
     const dt: f32 = 1.0 / 60.0;
 
     //drag and throw state
     var isDragging = false;
     var dragStart = Vec2{ .x = 0, .y = 0 };
+    var currentShape: u8 = 0; // 0 = circle, 1 = rectangle
 
     while (!rl.windowShouldClose()) {
-        //win dimensions
         const currentWidth: f32 = @floatFromInt(rl.getScreenWidth());
         const currentHeight: f32 = @floatFromInt(rl.getScreenHeight());
 
         const mousePos = rl.getMousePosition();
         const mouseVec = Vec2{ .x = mousePos.x, .y = mousePos.y };
 
-        //drag
+        //toggle shape with TAB
+        if (rl.isKeyPressed(.tab)) {
+            currentShape = (currentShape + 1) % 2;
+        }
+
+        //start drag
         if (rl.isMouseButtonPressed(.left)) {
             isDragging = true;
             dragStart = mouseVec;
@@ -43,70 +49,63 @@ pub fn main() anyerror!void {
         //release and throw
         if (rl.isMouseButtonReleased(.left) and isDragging) {
             isDragging = false;
-            const throwVel = dragStart.sub(mouseVec).scale(5.0); 
+            const throwVel = dragStart.sub(mouseVec).scale(5.0);
 
-            try circles.append(allocator, Circle{
-                .pos = dragStart,
-                .vel = throwVel,
-                .radius = 20.0,
-                .mass = 1.0,
-            });
+            const shape: Shape = if (currentShape == 0)
+                Shape{ .circle = .{ .radius = 20.0 } }
+            else
+                Shape{ .rectangle = .{ .width = 40.0, .height = 40.0 } };
+
+            var body = Body.init(dragStart, 1.0, shape);
+            body.vel = throwVel;
+            try world.addBody(body);
         }
 
-        //change gravity with arrow keys
-        if (rl.isKeyDown(.up)) gravity.y -= 10;
-        if (rl.isKeyDown(.down)) gravity.y += 10;
-        if (rl.isKeyPressed(.space)) gravity.y = 0; //toggle gravity
-        if (rl.isKeyPressed(.r)) gravity.y = 500; //reset gravity
+        //gravity controls
+        if (rl.isKeyDown(.up)) world.gravity.y -= 10;
+        if (rl.isKeyDown(.down)) world.gravity.y += 10;
+        if (rl.isKeyPressed(.space)) world.gravity.y = 0;
+        if (rl.isKeyPressed(.r)) world.gravity.y = 500;
 
-        //update every circle
-        for (circles.items) |*circle| {
-            circle.update(gravity, dt, currentWidth, currentHeight);
-        }
-
-        //check circle-to-circle collisions
-        for (circles.items, 0..) |*circle1, i| {
-            for (circles.items[i + 1 ..]) |*circle2| {
-                if (circle1.collidesWith(circle2.*)) {
-                    circle1.resolveCollision(circle2);
-                }
-            }
-        }
-
-        //clear circles
+        //clear
         if (rl.isKeyPressed(.c)) {
-            circles.clearRetainingCapacity();
+            world.clear();
         }
+
+        //update physics
+        world.update(dt, currentWidth, currentHeight);
 
         rl.beginDrawing();
         defer rl.endDrawing();
 
         rl.clearBackground(.white);
 
-        //draw drag line preview
+        //drag preview
         if (isDragging) {
-            rl.drawCircle(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), 20.0, .{ .r = 255, .g = 0, .b = 0, .a = 100 });
+            if (currentShape == 0) {
+                rl.drawCircle(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), 20.0, .{ .r = 255, .g = 0, .b = 0, .a = 100 });
+            } else {
+                rl.drawRectangle(@intFromFloat(dragStart.x - 20), @intFromFloat(dragStart.y - 20), 40, 40, .{ .r = 0, .g = 0, .b = 255, .a = 100 });
+            }
             rl.drawLine(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), @intFromFloat(mousePos.x), @intFromFloat(mousePos.y), .blue);
         }
 
-        //draw all circles
-        for (circles.items) |circle| {
-            rl.drawCircle(@intFromFloat(circle.pos.x), @intFromFloat(circle.pos.y), circle.radius, .red);
+        
+        for (world.bodies.items) |body| {
+            switch (body.shape) {
+                .circle => |circle| {
+                    rl.drawCircle(@intFromFloat(body.pos.x), @intFromFloat(body.pos.y), circle.radius, .red);
+                },
+                .rectangle => |rect| {
+                    rl.drawRectangle(@intFromFloat(body.pos.x - rect.width / 2), @intFromFloat(body.pos.y - rect.height / 2), @intFromFloat(rect.width), @intFromFloat(rect.height), .blue);
+                },
+                .polygon => {},
+            }
         }
 
-        //ui
-        var gravity_text_buf: [128]u8 = undefined;
-        const gravity_text_remainder =
-            try std.fmt.bufPrint(&gravity_text_buf, "Gravity: {d:.0} (UP/DOWN to adjust, SPACE to zero, R to reset.", .{gravity.y});
-        const gravity_text_len = gravity_text_buf.len - gravity_text_remainder.len;
-
-        //add sentinel
-        gravity_text_buf[gravity_text_len] = 0;
-
-        const gravityText: [:0]const u8 = gravity_text_buf[0..gravity_text_len :0];
-
-        rl.drawText("Click and drag to throw balls", 10, 10, 20, .green);
-        rl.drawText(gravityText, 10, 35, 20, .black);
-        rl.drawText("Press C to erase all balls", 10, 60, 20, .black);
+        // UI
+        const shapeText = if (currentShape == 0) "Circle" else "Rectangle";
+        rl.drawText("Drag to throw | TAB: Switch shape | C: Clear", 10, 10, 18, .dark_gray);
+        rl.drawText(@ptrCast(shapeText), 10, 35, 20, .green);
     }
 }
