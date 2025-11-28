@@ -1,111 +1,117 @@
 const rl = @import("raylib");
 const std = @import("std");
-const Vec2 = @import("vec2.zig").Vec2;
-const Body = @import("body.zig").Body;
-const Shape = @import("shape.zig").Shape;
-const World = @import("world.zig").World;
+const ui = @import("ui.zig");
+const NewtonsCradle = @import("simulations/newtons_cradle.zig").NewtonsCradle;
+const Vec3 = @import("vec3.zig").Vec3;
+
+const SimulationType = enum {
+    sandbox_2d,
+    newtons_cradle,
+};
 
 pub fn main() anyerror!void {
-    const screenWidth = 800;
-    const screenHeight = 450;
+    const screenWidth = 1200;
+    const screenHeight = 700;
 
     rl.setConfigFlags(.{ .window_resizable = true });
-    rl.initWindow(screenWidth, screenHeight, "VectorEngine");
+    rl.initWindow(screenWidth, screenHeight, "VectorEngine - Physics Simulator");
     defer rl.closeWindow();
     rl.setTargetFPS(60);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    //3D Camera
+    var camera = rl.Camera3D{
+        .position = .{ .x = 10, .y = 5, .z = 10 },
+        .target = .{ .x = 0, .y = -2, .z = 0 },
+        .up = .{ .x = 0, .y = 1, .z = 0 },
+        .fovy = 45,
+        .projection = .perspective,
+    };
 
-    var world = World.init(allocator);
-    defer world.deinit();
+    //ui
+    var panel = ui.Panel{
+        .x = 10,
+        .y = 10,
+        .width = 200,
+        .height = 300,
+        .title = "Controls",
+    };
+
+    var btn_reset = ui.Button.init(20, 40, 180, 30, "Reset");
+    var btn_2d = ui.Button.init(20, 80, 85, 30, "2D Mode");
+    var btn_3d = ui.Button.init(115, 80, 85, 30, "3D Mode");
+    var slider_gravity = ui.Slider.init(20, 140, 180, "Gravity", 0, 20, 9.81);
+    var slider_speed = ui.Slider.init(20, 190, 180, "Speed", 0.1, 3.0, 1.0);
+
+    //simulations
+    var cradle = NewtonsCradle.init();
+    const current_sim = SimulationType.newtons_cradle;
+    _ = current_sim;
 
     const dt: f32 = 1.0 / 60.0;
 
-    //drag and throw state
-    var isDragging = false;
-    var dragStart = Vec2{ .x = 0, .y = 0 };
-    var currentShape: u8 = 0; // 0 = circle, 1 = rectangle
-
     while (!rl.windowShouldClose()) {
-        const currentWidth: f32 = @floatFromInt(rl.getScreenWidth());
-        const currentHeight: f32 = @floatFromInt(rl.getScreenHeight());
-
-        const mousePos = rl.getMousePosition();
-        const mouseVec = Vec2{ .x = mousePos.x, .y = mousePos.y };
-
-        //toggle shape with TAB
-        if (rl.isKeyPressed(.tab)) {
-            currentShape = (currentShape + 1) % 2;
+        //ui updates
+        if (btn_reset.update()) {
+            cradle.reset();
         }
-
-        //start drag
-        if (rl.isMouseButtonPressed(.left)) {
-            isDragging = true;
-            dragStart = mouseVec;
+        if (btn_2d.update()) {
+            //to 2D sandbox
         }
-
-        //release and throw
-        if (rl.isMouseButtonReleased(.left) and isDragging) {
-            isDragging = false;
-            const throwVel = dragStart.sub(mouseVec).scale(5.0);
-
-            const shape: Shape = if (currentShape == 0)
-                Shape{ .circle = .{ .radius = 20.0 } }
-            else
-                Shape{ .rectangle = .{ .width = 40.0, .height = 40.0 } };
-
-            var body = Body.init(dragStart, 1.0, shape);
-            body.vel = throwVel;
-            try world.addBody(body);
+        if (btn_3d.update()) {
+            //to 3D Newton's cradle
         }
+        slider_gravity.update();
+        slider_speed.update();
 
-        //gravity controls
-        if (rl.isKeyDown(.up)) world.gravity.y -= 10;
-        if (rl.isKeyDown(.down)) world.gravity.y += 10;
-        if (rl.isKeyPressed(.space)) world.gravity.y = 0;
-        if (rl.isKeyPressed(.r)) world.gravity.y = 500;
-
-        //clear
-        if (rl.isKeyPressed(.c)) {
-            world.clear();
-        }
+        //update camera (orbit)
+        rl.updateCamera(&camera, .orbital);
 
         //update physics
-        world.update(dt, currentWidth, currentHeight);
+        const speed_mult = slider_speed.value;
+        cradle.update(dt * speed_mult);
 
+        //drawing
         rl.beginDrawing();
         defer rl.endDrawing();
+        rl.clearBackground(.ray_white);
 
-        rl.clearBackground(.white);
+        //3D Scene
+        {
+            rl.beginMode3D(camera);
+            defer rl.endMode3D();
 
-        //drag preview
-        if (isDragging) {
-            if (currentShape == 0) {
-                rl.drawCircle(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), 20.0, .{ .r = 255, .g = 0, .b = 0, .a = 100 });
-            } else {
-                rl.drawRectangle(@intFromFloat(dragStart.x - 20), @intFromFloat(dragStart.y - 20), 40, 40, .{ .r = 0, .g = 0, .b = 255, .a = 100 });
+            //draw ground
+            rl.drawGrid(20, 1.0);
+
+            //draw newton's cradle
+            for (cradle.pendulums) |p| {
+                // Draw rope
+                rl.drawLine3D(
+                    .{ .x = p.anchor.x, .y = p.anchor.y, .z = p.anchor.z },
+                    .{ .x = p.ball.pos.x, .y = p.ball.pos.y, .z = p.ball.pos.z },
+                    .dark_gray,
+                );
+
+                //draw ball
+                rl.drawSphere(
+                    .{ .x = p.ball.pos.x, .y = p.ball.pos.y, .z = p.ball.pos.z },
+                    cradle.ball_radius,
+                    .maroon,
+                );
             }
-            rl.drawLine(@intFromFloat(dragStart.x), @intFromFloat(dragStart.y), @intFromFloat(mousePos.x), @intFromFloat(mousePos.y), .blue);
+
+            //draw frame
+            rl.drawCubeWires(.{ .x = 0, .y = 0.5, .z = 0 }, 8, 1, 0.2, .dark_gray);
         }
 
-        
-        for (world.bodies.items) |body| {
-            switch (body.shape) {
-                .circle => |circle| {
-                    rl.drawCircle(@intFromFloat(body.pos.x), @intFromFloat(body.pos.y), circle.radius, .red);
-                },
-                .rectangle => |rect| {
-                    rl.drawRectangle(@intFromFloat(body.pos.x - rect.width / 2), @intFromFloat(body.pos.y - rect.height / 2), @intFromFloat(rect.width), @intFromFloat(rect.height), .blue);
-                },
-                .polygon => {},
-            }
-        }
+        //ui (2D overlay)
+        panel.draw();
+        btn_reset.draw();
+        btn_2d.draw();
+        btn_3d.draw();
+        slider_gravity.draw();
+        slider_speed.draw();
 
-        // UI
-        const shapeText = if (currentShape == 0) "Circle" else "Rectangle";
-        rl.drawText("Drag to throw | TAB: Switch shape | C: Clear", 10, 10, 18, .dark_gray);
-        rl.drawText(@ptrCast(shapeText), 10, 35, 20, .green);
+        rl.drawFPS(screenWidth - 100, 10);
     }
 }

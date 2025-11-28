@@ -1,7 +1,6 @@
 const rl = @import("raylib");
-const Vec2 = @import("vec2.zig").Vec2;
 
-pub const  Button = struct {
+pub const Button = struct {
     x: f32,
     y: f32,
     width: f32,
@@ -10,13 +9,23 @@ pub const  Button = struct {
     is_hovered: bool = false,
     is_pressed: bool = false,
 
+    pub fn init(x: f32, y: f32, width: f32, height: f32, text: [:0]const u8) Button {
+        return Button{
+            .x = x,
+            .y = y,
+            .width = width,
+            .height = height,
+            .text = text,
+        };
+    }
+
     pub fn update(self: *Button) bool {
         const mouse = rl.getMousePosition();
-        self.is_hovered = mouse.x > self.x and
+        self.is_hovered = mouse.x >= self.x and
             mouse.x <= self.x + self.width and
             mouse.y >= self.y and
             mouse.y <= self.y + self.height;
-        
+
         self.is_pressed = self.is_hovered and rl.isMouseButtonPressed(.left);
         return self.is_pressed;
     }
@@ -39,12 +48,13 @@ pub const  Button = struct {
         );
 
         const text_width = rl.measureText(self.text, 16);
-        rl.drawText(self.text, 
-            @intFromFloat(self.x + (self.width - @as(f32, @floatFromInt(text_width))) / 2), 
-            @intFromFloat(self.y + (self.height - 16) / 2), 
+        rl.drawText(
+            self.text,
+            @intFromFloat(self.x + (self.width - @as(f32, @floatFromInt(text_width))) / 2),
+            @intFromFloat(self.y + (self.height - 16) / 2),
             16,
             .black,
-            );
+        );
     }
 };
 
@@ -68,14 +78,14 @@ pub const Slider = struct {
             .min_val = min_val,
             .max_val = max_val,
             .value = default,
-            .label = label
+            .label = label,
         };
     }
 
     pub fn update(self: *Slider) void {
         const mouse = rl.getMousePosition();
         const in_bounds = mouse.x >= self.x and
-            mouse.x <= self.x + self.width  and
+            mouse.x <= self.x + self.width and
             mouse.y >= self.y and
             mouse.y <= self.y + self.height;
 
@@ -89,7 +99,7 @@ pub const Slider = struct {
         if (self.is_dragging) {
             const t = (mouse.x - self.x) / self.width;
             const clamped = @max(0.0, @min(1.0, t));
-            self.value = self.min_val  + clamped * (self.max_val - self.min_val);
+            self.value = self.min_val + clamped * (self.max_val - self.min_val);
         }
     }
 
@@ -99,7 +109,7 @@ pub const Slider = struct {
             @intFromFloat(self.x),
             @intFromFloat(self.y + 8),
             @intFromFloat(self.width),
-            4, 
+            4,
             .gray,
         );
 
@@ -109,6 +119,7 @@ pub const Slider = struct {
 
         rl.drawCircle(@intFromFloat(knob_x), @intFromFloat(self.y + 10), 8, .dark_gray);
 
+        //label
         rl.drawText(self.label, @intFromFloat(self.x), @intFromFloat(self.y - 18), 14, .black);
     }
 };
@@ -126,7 +137,7 @@ pub const Panel = struct {
             @intFromFloat(self.y),
             @intFromFloat(self.width),
             @intFromFloat(self.height),
-            .{ .r = 240, .g = 240, .b = 240, .a = 230},
+            .{ .r = 240, .g = 240, .b = 240, .a = 230 },
         );
         rl.drawRectangleLines(
             @intFromFloat(self.x),
@@ -139,7 +150,7 @@ pub const Panel = struct {
     }
 
     pub fn contains(self: Panel, x: f32, y: f32) bool {
-        return x >= self.x and x <= self.x + self.width and 
-        y >= self.y and y <= self.y + self.height;
+        return x >= self.x and x <= self.x + self.width and
+            y >= self.y and y <= self.y + self.height;
     }
 };
